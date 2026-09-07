@@ -1679,7 +1679,19 @@
         }
 
         function saveGameData() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(gameData));
+            if (gameData && Array.isArray(gameData.items)) {
+                gameData.items = gameData.items.filter(item =>
+                    item &&
+                    typeof item.title === 'string' && item.title.trim() !== '' &&
+                    typeof item.youtube === 'string' && item.youtube.trim() !== ''
+                );
+            } else {
+                gameData = { items: [], lastPlayed: [] };
+            }
+
+            const dataStr = JSON.stringify(gameData);
+            localStorage.setItem(STORAGE_KEY, dataStr);
+            cachedStorageSize = (dataStr.length / 1024).toFixed(2);
             updateStats();
         }
 
@@ -1853,7 +1865,10 @@
         }
 
         function loadGameContent() {
-            if (!gameState.currentItem) return;
+            if (!gameState.currentItem) {
+                showMessage('Fehler: Kein gültiges Video gefunden!', 'error');
+                return;
+            }
 
             // Lösche die Video-URL damit nichts automatisch abspielt
             const youtubePlayer = document.getElementById('youtubePlayer');
@@ -1997,7 +2012,12 @@
         }
 
         function revealHint() {
-            if (gameState.hintsRemaining <= 0 || !gameState.currentItem) {
+            if (!gameState.currentItem) {
+                showMessage('Fehler: Kein Video für Hinweise gefunden!', 'error');
+                return;
+            }
+
+            if (gameState.hintsRemaining <= 0) {
                 showMessage('No hints remaining!', 'warning');
                 return;
             }
@@ -2163,6 +2183,11 @@
 
         function skipGame() {
             if (gameState.gameOver || !gameState.videoStarted) return;
+
+            if (!gameState.currentItem) {
+                showMessage('Fehler: Kein Video zum Überspringen vorhanden!', 'error');
+                return;
+            }
 
             clearInterval(gameState.timerInterval);
             gameState.gameOver = true;
@@ -2523,7 +2548,23 @@
                 return;
             }
 
-            const dataStr = JSON.stringify(gameData, null, 2);
+            const validItems = gameData.items.filter(item =>
+                item &&
+                typeof item.title === 'string' && item.title.trim() !== '' &&
+                typeof item.youtube === 'string' && item.youtube.trim() !== ''
+            );
+
+            if (validItems.length === 0) {
+                showMessage('Error: All entries are invalid or corrupted. Export aborted.', 'error');
+                return;
+            }
+
+            const exportPayload = {
+                ...gameData,
+                items: validItems
+            };
+
+            const dataStr = JSON.stringify(exportPayload, null, 2);
             const dataBlob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(dataBlob);
             const link = document.createElement('a');
